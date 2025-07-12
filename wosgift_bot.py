@@ -1,54 +1,37 @@
-
 import requests
-from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import pytesseract
+from PIL import Image
+from io import BytesIO
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # بيانات البوت
-TELEGRAM_BOT_TOKEN = "7498674497:AAHaYtqJJVc8reAZ4O198hn9Wb_WPBWOLcM"
+TELEGRAM_BOT_TOKEN = "توكن البوت حقك هنا"
 REDEEM_URL = "https://wos-giftcode.centurygame.com"
 ids_list = ["225281098", "223118226"]
 session = requests.Session()
-pending_redeem = {}
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id != update.message.chat.id:
-        await update.message.reply_text("🚫 هذا البوت مخصص فقط للإدمن.")
-        return
-    await update.message.reply_text("👋 هلا يوسف ❤️\nاكتب الكود اللي تبغى أوزعه على الأعضاء:")
 
 async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id != update.message.chat.id:
-        await update.message.reply_text("🚫 هذا البوت مخصص فقط للإدمن.")
-        return
-
     if len(context.args) == 0:
         await update.message.reply_text("❌ أرسل الكود بهذي الطريقة:\n/redeem CODE1234")
         return
 
     code = context.args[0]
-    pending_redeem[user_id] = {"code": code}
-
-    captcha_resp = session.get(f"{REDEEM_URL}/captcha", stream=True)
-    with open("captcha.jpg", "wb") as f:
-        for chunk in captcha_resp.iter_content(1024):
-            f.write(chunk)
-
-    await update.message.reply_photo(photo=open("captcha.jpg", "rb"),
-                                     caption="📸 اكتب الكابتشا هنا:")
-
-async def get_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in pending_redeem:
-        await update.message.reply_text("❌ ما فيه كود محفوظ. ابدأ من جديد واكتب الكود أول.")
-        return
-
-    captcha_text = update.message.text.strip()
-    code = pending_redeem[user_id]["code"]
     results = []
 
     for player_id in ids_list:
+        # تحميل صورة الكابتشا
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+        captcha_resp = session.get(f"{REDEEM_URL}/captcha", headers=headers, stream=True)
+        img = Image.open(BytesIO(captcha_resp.content))
+
+        # التعرف على النص في الكابتشا
+        captcha_text = pytesseract.image_to_string(img).strip()
+        print(f"🔤 الكابتشا المقروءة: {captcha_text}")
+
+        # إرسال الطلب
         resp = session.post(f"{REDEEM_URL}/redeem", data={
             "uid": player_id,
             "giftCode": code,
@@ -63,7 +46,5 @@ async def get_captcha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🎁 النتائج:\n{report}")
 
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("redeem", redeem))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_captcha))
 app.run_polling()
