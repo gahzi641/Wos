@@ -5,8 +5,8 @@ from io import BytesIO
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# بيانات البوت
-TELEGRAM_BOT_TOKEN = "توكن البوت حقك هنا"
+# ✅ توكن البوت حقك
+TELEGRAM_BOT_TOKEN = "7498674497:AAHaYtqJJVc8reAZ4O198hn9Wb_WPBWOLcM"
 REDEEM_URL = "https://wos-giftcode.centurygame.com"
 ids_list = ["225281098", "223118226"]
 session = requests.Session()
@@ -20,27 +20,33 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     results = []
 
     for player_id in ids_list:
-        # تحميل صورة الكابتشا
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
-        captcha_resp = session.get(f"{REDEEM_URL}/captcha", headers=headers, stream=True)
-        img = Image.open(BytesIO(captcha_resp.content))
+        try:
+            # تحميل صورة الكابتشا
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            }
+            captcha_resp = session.get(f"{REDEEM_URL}/captcha", headers=headers, stream=True)
+            captcha_resp.raise_for_status()
+            img = Image.open(BytesIO(captcha_resp.content))
 
-        # التعرف على النص في الكابتشا
-        captcha_text = pytesseract.image_to_string(img).strip()
-        print(f"🔤 الكابتشا المقروءة: {captcha_text}")
+            # التعرف على النص في الكابتشا
+            captcha_text = pytesseract.image_to_string(img).strip()
+            print(f"🔤 الكابتشا المقروءة: {captcha_text}")
 
-        # إرسال الطلب
-        resp = session.post(f"{REDEEM_URL}/redeem", data={
-            "uid": player_id,
-            "giftCode": code,
-            "captcha": captcha_text
-        })
-        if "success" in resp.text:
-            results.append(f"✅ {player_id}: تم التفعيل")
-        else:
-            results.append(f"❌ {player_id}: فشل التفعيل")
+            # إرسال الطلب
+            resp = session.post(f"{REDEEM_URL}/redeem", data={
+                "uid": player_id,
+                "giftCode": code,
+                "captcha": captcha_text
+            })
+
+            if "success" in resp.text:
+                results.append(f"✅ {player_id}: تم التفعيل")
+            else:
+                results.append(f"❌ {player_id}: فشل التفعيل")
+
+        except Exception as e:
+            results.append(f"❌ {player_id}: خطأ أثناء التنفيذ - {e}")
 
     report = "\n".join(results)
     await update.message.reply_text(f"🎁 النتائج:\n{report}")
